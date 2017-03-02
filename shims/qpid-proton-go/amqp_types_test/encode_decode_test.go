@@ -8,6 +8,7 @@ import (
 	"testing"
 	"log"
 	"fmt"
+	"qpid.apache.org/amqp"
 )
 
 func TestMessageDecodeEncode(t *testing.T) {
@@ -35,12 +36,14 @@ func TestMessageDecodeEncode(t *testing.T) {
 		//[]string{"decimal64", `["0xffefffffffffffff"]`},
 		//[]string{"decimal128", `["0xff0102030405060708090a0b0c0d0e0f"]`},
 		[]string{"char", `["G"]`},
+		//[]string{"char", `["紅"]`}, // this gets printed back in hex, so I cannot enable it
 		[]string{"char", `["0x16b5"]`},
 		//[]string{"timestamp", `["0xdc6acfac00"]`},
 		//[]string{"uuid", `["00010203-0405-0607-0809-0a0b0c0d0e0f"]`},
 		//[]string{"binary", `["\\x01\\x02\\x03\\x04\\x05abcde\\x80\\x81\\xfe\\xff"]`},
 		[]string{"string", `["Hello, World!"]`},
 		[]string{"symbol", `["myDomain.123"]`},
+		[]string{"binary", `["someData"]`},
 
 		[]string{"string", `[]`},
 		[]string{"list", `[[]]`},
@@ -50,7 +53,7 @@ func TestMessageDecodeEncode(t *testing.T) {
 		[]string{"list", `[["string:v"]]`},
 		[]string{"map", `[{"string:k":"string:v"}]`},
 		[]string{"map", `[{"string:k":[]}]`},
-		[]string{"map", `[{"string:k":{}}]`},
+		[]string{"map", `[{"string:k":{"string:k":"string:v"}}]`},
 
 		[]string{"list", `[[[],[[],[[],[],[]],[]],[]]]`},
 		[]string{"list", `[["ubyte:1"]]`},
@@ -75,7 +78,19 @@ func TestMessageDecodeEncode(t *testing.T) {
 		  []string{"map", `[{"string:None":"none:"}]`},
 		  []string{"map", `[{"none:":"string:None"}]`},
 
-		  //[]string{"", `[""]`},
+//		  []string{"map",
+//`[
+//{},
+//{"string:one":"ubyte:1","string:two":"ushort:2"},
+//{
+//"boolean:True":"string:True",
+//
+//"short:2":"int:2",
+//"string:One":"long:-1234567890",
+//"string:False":"boolean:False",
+//"string:None":"none:"
+//"string:map":{"char:A":"int:1","char:B":"int:2"},
+//}]`},
 
 		  } {
 		log.Println(in) // useful for debugging
@@ -86,7 +101,15 @@ func TestMessageDecodeEncode(t *testing.T) {
 		for _, jj := range j {
 			must(err)
 			result := parse(in[0], jj)
-			through = append(through, load(in[0], result))
+
+			m := amqp.NewMessage()
+			m.Marshal(result)
+
+			type_, value := load(in[0], m.Body())
+			if type_ != in[0] {
+				t.Errorf("Detected type %v does not match expected type '%v'", type_, in[0])
+			}
+			through = append(through, value)
 		}
 		fmt.Printf("%+v\n", through) // useful for debugging
 		resultstring := toString(through)
