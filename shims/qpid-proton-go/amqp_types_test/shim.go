@@ -6,15 +6,15 @@ import (
 	"net/url"
 	"time"
 
-	"qpid.apache.org/electron"
 	"encoding/json"
-	"strings"
-	"strconv"
-	"qpid.apache.org/amqp"
 	"fmt"
-	"unicode/utf8"
-	"unicode"
 	"math"
+	"qpid.apache.org/amqp"
+	"qpid.apache.org/electron"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 func must(err error) {
@@ -74,7 +74,7 @@ func parse(type_ string, value interface{}) interface{} {
 			i, err := strconv.ParseInt(v, 0, 64)
 			must(err)
 			return int64(i)
-		case "null", "none":  // TODO: this is ugly
+		case "null", "none": // TODO: this is ugly
 			return nil
 		case "short":
 			i, err := strconv.ParseInt(v, 0, 16)
@@ -132,178 +132,86 @@ func parse(type_ string, value interface{}) interface{} {
 				if utf8.RuneCountInString(v) != 1 {
 					log.Fatal("char contains more or less than one utf-8 char")
 				}
-				return rune(v[0])
+				r, _ := utf8.DecodeRuneInString(v)
+				return r
 			}
 			return rune(f)
 		default:
 			log.Fatalf("Wrong type %v given string value %v\n", type_, v)
 		}
 	case []interface{}:
-		// assume it is []string
-		switch type_ {
-		case "list":
-			l := make([]interface{}, 0)
-			for _, i := range v {
-				switch s := i.(type) {
-				case string:
-					tuple := strings.SplitN(s, ":", 2)
-					if len(tuple) == 2 {
-						l = append(l, parse(tuple[0], tuple[1]))
-					} else {
-						l = append(l, s)
-					}
-				case []interface{}:
-					//fmt.Printf("parsing list in a list %+v\n", s)
-					// TODO: it it is always empty lists, I can just throw it there directly;... better not do that
-					l = append(l, parse("list", s))
-				case map[string]interface{}:
-					// there is a map[string]interface{}, but lets be general; actually, that was stupid idea, this is json....
-					l = append(l, parse("map", s))
-				default:
-					// TODO: it can be a map? likely not!
-					log.Fatalf("neither value nor nested list in a list, the type is %T", i)
-				}
-			}
-			return l
+		l := make([]interface{}, 0)
+		for _, i := range v {
+			l = append(l, parseValue(i))
 		}
+		return l
 	case map[string]interface{}:
-		// assume it is map[string]string
-		switch type_ {
-		case "map":
-			m := make(map[interface{}]interface{})
-			for k, v := range v {
-				var kk interface{}
-				var vv interface{}
-				// FIXME: duplicates the list case
-				tuple := strings.SplitN(k, ":", 2)
-				if len(tuple) == 2 {
-					kk = parse(tuple[0], tuple[1])
-				} else {
-					kk = k
-				}
-				switch v := v.(type) {
-				case string:
-					tuple := strings.SplitN(v, ":", 2)
-					if len(tuple) == 2 {
-						vv = parse(tuple[0], tuple[1])
-					} else {
-						vv = v
-					}
-				case []interface{}:
-					vv = parse("list", v)
-				case map[string]interface{}:
-					vv = parse("map", v)
-				default:
-					log.Fatalf("neither value nor nested map a map key, value %v type is %T", v, v)
-				}
-				m[kk] = vv
-			}
-			return m
+		m := make(map[interface{}]interface{})
+		for k, v := range v {
+			// think about the value of key, do I need typeswich?
+			m[parseValue(k)] = parseValue(v)
 		}
+		return m
 	}
 	log.Fatalf("Wrong type %v given value %+v of type %T\n", type_, value, value)
 	return nil
 }
 
-func formatUnsigned(v int64) string {
-	sign := ""
-	if v < 0 {
-		sign = "-"
+// parseValue is a helper for parse for parsing keys and values in nested lists and maps
+func parseValue(v interface{}) interface{} {
+	switch v := v.(type) {
+	case string:
+		tuple := strings.SplitN(v, ":", 2)
+		if len(tuple) == 2 {
+			return parse(tuple[0], tuple[1])
+		} else {
+			return v
+		}
+	case []interface{}:
+		return parse("", v)
+	case map[string]interface{}:
+		return parse("", v)
+	default:
+		log.Fatalf("neither value nor nested map a map key, value %v type is %T", v, v)
+		return nil
 	}
-	return fmt.Sprintf("%s0x%x", sign, v)
 }
 
 // load is inverse function to parse
-func load(type_ string, body interface{}) interface{} {
-	switch type_ {
-	case "ubyte", "ushort", "uint", "ulong":
-		return fmt.Sprintf("%#x", body)
-	case "byte", "short", "int", "long":
-		return fmt.Sprintf("%#x", body)
-	case "float":
-		// TODO: what's more reasonable criterion?
-		f := body.(float32)
-		if (-10 <= f) && (f <= 10) {
-			return fmt.Sprint(body)
-		}
-		return fmt.Sprintf("%#x", math.Float32bits(f))
-	case "double":
-		// TODO: what's more reasonable criterion?
-		f := body.(float64)
-		if (-10 <= f) && (f <= 10) {
-			return fmt.Sprint(body)
-		}
-		return fmt.Sprintf("%#x", math.Float64bits(f))
+func load(type_ string, body interface{}) (string, interface{}) {
+	// handle values which format differently top level and inside list or map
+	switch type_ { // this is cheating, but it allows to handle top level char cases
 	case "char":
 		r := body.(rune)
 		if r <= unicode.MaxASCII && (unicode.IsDigit(r) || unicode.IsLetter(r)) || unicode.IsSpace(r) {
-			return fmt.Sprintf("%c", body)
+			return "char", fmt.Sprintf("%c", body)
 		}
-		return fmt.Sprintf("%#x", body)
-	case "boolean":
-		return strings.Title(fmt.Sprint(body))
-	case "string":
-		return body
-	case "null":
-		return "None"
-	case "symbol":
-		return fmt.Sprint(body)
-	case "list":
-		l := make([]interface{}, 0)
-		for _, v := range body.([]interface{}) {
-			loadedt, loadedv := loadValue(v)
-			switch loadedt {
-			case "list", "map":
-				l = append(l, loadedv)
-			default:
-				l = append(l, fmt.Sprintf("%s:%s", loadedt, loadedv))
-			}
-		}
-		return l
-	case "map":
-		m := make(map[string]interface{})
-		for k, v := range body.(map[interface{}]interface{}) {
-			var kk string
-			keyt, keyv := loadValue(k)
-			switch keyt {
-			case "list", "map":
-				//todo: not supported
-				log.Fatalln("load: cannot hancle list or map as map key yet")
-				//kk = keyv
-			default:
-				kk = fmt.Sprintf("%s:%s", keyt, keyv.(string))
-			}
-
-			loadedt, loadedv := loadValue(v)
-			switch loadedt {
-			case "list", "map":
-				m[kk] = loadedv
-			default:
-				m[kk] = fmt.Sprintf("%s:%s", loadedt, loadedv)
-			}
-		}
-		return m
+		return "char", fmt.Sprintf("%#x", body)
 	}
-	log.Panicf("cannot decode %v", body)
-	return nil
+	switch body.(type) {
+	case uint8, uint16, uint32, uint64, int8, int16, int32, int64:
+		// format number as hex
+		return GoToAMQPMapping[fmt.Sprintf("%T", body)], fmt.Sprintf("%#x", body)
+	case nil:
+		return "null", "None"
+	}
+
+	// everything else
+	return loadValue(body)
 }
 
-func parseValue(v interface{}) interface{} {
-	return nil
-}
-
-var GoToAMQPMapping = map[string]string {
-	"uint8": "ubyte",
+var GoToAMQPMapping = map[string]string{
+	"uint8":  "ubyte",
 	"uint16": "ushort",
 	"uint32": "uint",
 	"uint64": "ulong",
-	"int8": "byte",
-	"int16": "short",
-	"int32": "int",
-	"int64": "long",
+	"int8":   "byte",
+	"int16":  "short",
+	"int32":  "int",
+	"int64":  "long",
 }
 
-// loadValue loads a list item or map key
+// loadValue is helper for load
 func loadValue(v interface{}) (string, interface{}) {
 	switch body := v.(type) {
 	case nil:
@@ -324,25 +232,47 @@ func loadValue(v interface{}) (string, interface{}) {
 			return "double", fmt.Sprint(body)
 		}
 		return "double", fmt.Sprintf("%#x", math.Float64bits(body))
-	// TODO: i cannot distinguish int32 and rune in Go
 	//case rune:
-	//	r := body
-	//	if r <= unicode.MaxASCII && (unicode.IsDigit(r) || unicode.IsLetter(r)) || unicode.IsSpace(r) {
-	//		return "char", fmt.Sprintf("%c", body)
-	//	}
-	//	return "char", fmt.Sprintf("%#x", body)
+	// TODO: cannot distinguish int32 and rune types in Go, this is cheated around a bit in load() above
+	case amqp.Binary:
+		return "binary", v
 	case bool:
 		return "boolean", strings.Title(fmt.Sprint(body))
-	//case string:
-	//	return "string", body
-	//case nil:
-	//	return "null", "None"
 	case amqp.Symbol:
 		return "symbol", fmt.Sprint(body)
-	case []interface{}:
-		return "list", load("list", v)
-	case map[interface{}]interface{}:
-		return "map", load("map", v)
+	case amqp.List:
+		l := make([]interface{}, 0)
+		for _, v := range body {
+			loadedt, loadedv := loadValue(v)
+			switch loadedt {
+			case "list", "map":
+				l = append(l, loadedv)
+			default:
+				l = append(l, fmt.Sprintf("%s:%s", loadedt, loadedv))
+			}
+		}
+		return "list", l
+	case amqp.Map:
+		m := make(map[string]interface{})
+		for k, v := range body {
+			var kk string
+			keyt, keyv := loadValue(k)
+			switch keyt {
+			case "list", "map":
+				log.Fatalln("load: cannot handle list or map in a map key yet")
+			default:
+				kk = fmt.Sprintf("%s:%s", keyt, keyv.(string))
+			}
+
+			loadedt, loadedv := loadValue(v)
+			switch loadedt {
+			case "list", "map":
+				m[kk] = loadedv
+			default:
+				m[kk] = fmt.Sprintf("%s:%s", loadedt, loadedv)
+			}
+		}
+		return "map", m
 	default:
 		log.Panicf("loadValue: cannot decode %v of type %T", v, v)
 		return "", nil
@@ -354,4 +284,3 @@ func toString(bodies []interface{}) string {
 	must(err)
 	return string(j)
 }
-

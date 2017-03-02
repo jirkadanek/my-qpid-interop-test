@@ -64,7 +64,11 @@ func receive(addr, queue, type_ string, count int) ([]string, error) {
 		m, err := r.ReceiveTimeout(10 * time.Second) // C# uses --timeout value here
 		switch err {
 		case nil:
-			data = append(data, load(type_, m.Message.Body()))
+			receivedType, value := load(type_, m.Message.Body())
+			if type_ != receivedType {
+				log.Fatalf("Receiver got value of type %s while %s was expected", receivedType, type_)
+			}
+			data = append(data, value)
 			err = m.Accept()
 			must(err)
 		//case electron.Timeout:
