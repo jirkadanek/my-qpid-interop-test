@@ -47,6 +47,7 @@ endif ()
 add_subdirectory(shims/qpid-proton-cpp/src)
 add_subdirectory(shims/amqpnetlite/src)
 add_subdirectory(shims/rhea-js)
+add_subdirectory(shims/qpid-proton-go)
 
 # Build Java code
 install(CODE "execute_process(COMMAND mvn -DskipTests install
