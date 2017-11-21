@@ -1,4 +1,4 @@
-package main
+package amqp_types_test
 
 import (
 	"log"
@@ -17,13 +17,13 @@ import (
 	"unicode/utf8"
 )
 
-func must(err error) {
+func Must(err error) {
 	if err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func connect(url *url.URL) (c electron.Connection, err error) {
+func Connect(url *url.URL) (c electron.Connection, err error) {
 	timeout := 15 * time.Second
 	tcp, err := net.DialTimeout("tcp", url.Host, timeout)
 	if err != nil {
@@ -49,7 +49,7 @@ func connect(url *url.URL) (c electron.Connection, err error) {
 	return
 }
 
-func parse(type_ string, value interface{}) interface{} {
+func Parse(type_ string, value interface{}) interface{} {
 	switch v := value.(type) {
 	case string:
 		switch type_ {
@@ -57,28 +57,28 @@ func parse(type_ string, value interface{}) interface{} {
 			return amqp.Binary(v)
 		case "boolean":
 			b, err := strconv.ParseBool(v)
-			must(err)
+			Must(err)
 			return b
 		case "byte":
 			b, err := strconv.ParseInt(v, 0, 8)
-			must(err)
+			Must(err)
 			return int8(b) // AMQP byte is not a Go byte
 		case "decimal64", "decimal128":
 			// TODO: no idea how to send this, let's send nothing
 			return nil
 		case "int":
 			i, err := strconv.ParseInt(v, 0, 32)
-			must(err)
+			Must(err)
 			return int32(i)
 		case "long":
 			i, err := strconv.ParseInt(v, 0, 64)
-			must(err)
+			Must(err)
 			return int64(i)
 		case "null", "none": // TODO: this is ugly
 			return nil
 		case "short":
 			i, err := strconv.ParseInt(v, 0, 16)
-			must(err)
+			Must(err)
 			return int16(i)
 		case "string":
 			return string(v)
@@ -89,19 +89,19 @@ func parse(type_ string, value interface{}) interface{} {
 			return nil
 		case "ubyte":
 			i, err := strconv.ParseUint(v, 0, 8)
-			must(err)
+			Must(err)
 			return uint8(i)
 		case "uint":
 			i, err := strconv.ParseUint(v, 0, 32)
-			must(err)
+			Must(err)
 			return uint32(i)
 		case "ulong":
 			i, err := strconv.ParseUint(v, 0, 64)
-			must(err)
+			Must(err)
 			return uint64(i)
 		case "ushort":
 			i, err := strconv.ParseUint(v, 0, 16)
-			must(err)
+			Must(err)
 			return uint16(i)
 		case "uuid":
 			// TODO: no idea how to send this, let's send nothing
@@ -111,7 +111,7 @@ func parse(type_ string, value interface{}) interface{} {
 			if err != nil {
 				// hex bytes
 				f, err := strconv.ParseUint(v, 0, 32)
-				must(err)
+				Must(err)
 				return math.Float32frombits(uint32(f))
 			}
 			return float32(f)
@@ -120,7 +120,7 @@ func parse(type_ string, value interface{}) interface{} {
 			if err != nil {
 				// hex bytes
 				f, err := strconv.ParseUint(v, 0, 64)
-				must(err)
+				Must(err)
 				return math.Float64frombits(f)
 			}
 			return float64(f)
@@ -163,9 +163,9 @@ func parseValue(v interface{}) interface{} {
 	case string:
 		return v
 	case []interface{}:
-		return parse("", v)
+		return Parse("", v)
 	case map[string]interface{}:
-		return parse("", v)
+		return Parse("", v)
 	default:
 		log.Fatalf("neither value nor nested map a map key, value %v type is %T", v, v)
 		return nil
@@ -173,7 +173,7 @@ func parseValue(v interface{}) interface{} {
 }
 
 // load is inverse function to parse
-func load(type_ string, body interface{}) (string, interface{}) {
+func Load(type_ string, body interface{}) (string, interface{}) {
 	// handle values which format differently top level and inside list or map
 	switch type_ { // this is cheating, but it allows to handle top level char cases
 	case "char":
@@ -274,8 +274,8 @@ func loadValue(v interface{}) (string, interface{}) {
 	}
 }
 
-func toString(bodies []interface{}) string {
+func String(bodies []interface{}) string {
 	j, err := json.Marshal(bodies)
-	must(err)
+	Must(err)
 	return string(j)
 }

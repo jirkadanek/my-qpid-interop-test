@@ -9,16 +9,20 @@ import (
 
 	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
+
+	"qpid.apache.org/amqp_types_test"
+	"strings"
 )
 
 func printSenderUsage(w io.Writer) {
 	usage := `
+ * --- main ---
  * Args: 1: Broker address (ip-addr:port)
  *       2: Queue name
  *       3: AMQP type
  *       4: Test value(s) as JSON string`
 
-	fmt.Fprintln(w, usage)
+	fmt.Fprintln(w, strings.TrimLeft(usage, "\n"))
 }
 
 func main() {
@@ -51,19 +55,19 @@ func sender(addr, queue, type_, value string) error {
 	}
 
 	url, err := amqp.ParseURL(addr)
-	must(err)
+	amqp_types_test.Must(err)
 	url.Path = queue
-	c, err := connect(url)
-	must(err)
+	c, err := amqp_types_test.Connect(url)
+	amqp_types_test.Must(err)
 
 	options := make([]electron.LinkOption, 0)
 	options = append(options, electron.Target(url.Path))
 	s, err := c.Sender(options...)
-	must(err)
+	amqp_types_test.Must(err)
 
 	for _, v := range values {
 		m := amqp.NewMessage()
-		m.Marshal(parse(type_, v))
+		m.Marshal(amqp_types_test.Parse(type_, v))
 		outcome := s.SendSync(m)
 		if outcome.Error != nil {
 			log.Fatal(outcome.Error)

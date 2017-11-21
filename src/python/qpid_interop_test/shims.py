@@ -221,7 +221,7 @@ class QpidJmsShim(Shim):
 
     def get_java_class_path(self):
         """Method to construct and return the Java class path necessary to run the shim"""
-        return self.dependency_class_path;
+        return self.dependency_class_path
 
 class AmqpNetLiteShim(Shim):
     """Shim for AMQP.Net Lite client"""
@@ -233,7 +233,7 @@ class AmqpNetLiteShim(Shim):
 
 
 class ProtonGoShim(Shim):
-    """Shim for AMQP.Net Lite client"""
+    """Shim for qpid-proton Go client"""
     NAME = 'ProtonGo'
 
     def __init__(self, sender_shim, receiver_shim):

@@ -1,7 +1,9 @@
-// Quick brokerless test to check that sender and receiver can
-// Mostly useful for initial shim development.
+// Quick self-contained sanity check that sender and receiver can pass data directly to each other
+// Mostly useful for initial shim development. The testcases are pulled from the actual QIT test.
 
-package main
+// $ GOPATH=`pwd`/../../../build/shims/qpid-proton-go/ go test shim.go shim_test.go
+
+package amqp_types_test_test
 
 import (
 	"encoding/json"
@@ -112,12 +114,10 @@ func TestMessageDecodeEncode(t *testing.T) {
 			through = append(through, value)
 		}
 		fmt.Printf("%+v\n", through) // useful for debugging
-		resultstring := toString(through)
-		if in[1] != resultstring {
-			t.Errorf("Expected `%s`, actual `%s`.", in[1], resultstring)
+		result := toString(through)
+		if in[1] != result {
+			t.Errorf("Expected `%s`, actual `%s`.", in[1], result)
 			//panic("")
 		}
-		//text = `[[], {}, {"string:one": "ubyte:1", "string:two": "ushort:2"}, {"string:One": "long:-1234567890", "none:": "string:None", "short:2": "int:2", "string:map": {"char:A": "int:1", "char:B": "int:2"}, "boolean:True": "string:True", "string:False": "boolean:False", "string:None": "none:"}]]'`
-
 	}
 }
